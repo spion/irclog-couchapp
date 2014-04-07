@@ -2,7 +2,11 @@
 
 var URL_BASE = '';
 
-angular.module('ircLog', ['ngRoute', 'gdamjan.CouchDB', 'Colorizer'], function($routeProvider) {
+// when testing locally, change the base URL
+if (location.host === 'localhost:8000')
+    URL_BASE = 'https://irc.softver.org.mk/';
+
+var logApp = angular.module('ircLog', ['ngRoute', 'gdamjan.CouchDB', 'Colorizer'], function($routeProvider) {
    $routeProvider
       .when('/', {
          templateUrl: 'home.html',
@@ -17,9 +21,10 @@ angular.module('ircLog', ['ngRoute', 'gdamjan.CouchDB', 'Colorizer'], function($
          controller: 'ChannelLogAroundDocController'
       })
       .otherwise({ redirectTo: '/'});
-})
+});
+logApp.controller('MainController', function(){ });
 
-.controller('HomeController', function ($rootScope, $scope, couchView) {
+logApp.controller('HomeController', function ($rootScope, $scope, couchView) {
    delete $rootScope.title;
    $scope.rows = [];
    couchView(URL_BASE + 'ddoc/_view/channel', {
@@ -28,10 +33,11 @@ angular.module('ircLog', ['ngRoute', 'gdamjan.CouchDB', 'Colorizer'], function($
    }).get().then(function(result) {
       $scope.rows.push.apply($scope.rows, result.rows)
    });
-})
+});
 
-.controller('ChannelLogsController', function ($rootScope, $scope, $routeParams,
-                                               couchView, couchChanges) {
+logApp.controller('ChannelLogsController', function (
+    $rootScope, $scope, $routeParams,
+    couchView, couchChanges, $window, $timeout) {
    $scope.channel = $rootScope.title = $routeParams.channel;
    $scope.rows = [];
 
@@ -48,15 +54,36 @@ angular.module('ircLog', ['ngRoute', 'gdamjan.CouchDB', 'Colorizer'], function($
 
       var params = { include_docs:true, since: result.last_seq,
                      filter: 'log/channel', channel: 'lugola' };
-      couchChanges(URL_BASE + 'api/_changes', params).then(
-         null,
+      couchChanges(URL_BASE + 'api/_changes', params).then(null,
          function (err) { console.log(err) },
          function (data) {
-            console.log("notify");
-            $scope.rows.push.apply($scope.rows, data);
-         }
-      );
+             notifyNewRows(data);
+             $scope.rows.push.apply($scope.rows, data);
+         });
    });
+
+    function notifyNewRows(data) {
+        if ($scope.unreadCount != null) {
+            $scope.unreadCount += data.length
+            if (!$scope.flashing) {
+                flashTitlebar().then(function() {
+                    if ($scope.unreadCount)
+                        $rootScope.flashMessage = '('+$scope.unreadCount+') ';
+                });
+            }
+        }
+    }
+    function flashTitlebar(n) {
+        if (n == null) n = 5;
+        $scope.flashing = true;
+        var turnon = n % 2 && $scope.unreadCount;
+        $rootScope.flashMessage = turnon && $scope.unreadCount ? '*** ' : '';
+        if (n <= 0)
+            return ($scope.flashing = false);
+        else
+            return $timeout(function(){}, 500)
+            .then(flashTitlebar.bind(null, n - 1));
+    }
 
    var pager = view;
    $scope.prevClick = function() {
@@ -67,9 +94,18 @@ angular.module('ircLog', ['ngRoute', 'gdamjan.CouchDB', 'Colorizer'], function($
          $scope.rows.push.apply($scope.rows, result.rows);
       })
    };
+    var win = angular.element($window);
+    win.bind('blur', function() {
+        $scope.unreadCount = 0;
+    });
+    win.bind('focus', function() {
+        $scope.unreadCount = null;
+        $rootScope.flashMessage = '';
+        $rootScope.$apply();
+    });
 })
 
-.controller('ChannelLogAroundDocController', function ($rootScope, $scope, $routeParams,
+logApp.controller('ChannelLogAroundDocController', function ($rootScope, $scope, $routeParams,
                                                $q, couchDB, couchView) {
    $scope.channel = $rootScope.title = $routeParams.channel;
    $scope.docid = $routeParams.docid;
