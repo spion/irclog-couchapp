@@ -1,4 +1,15 @@
-"use strict";
+
+/* jshint newcap: false */
+
+var React = require('react');
+var rrc = require('react-router-component');
+var Locations = rrc.Locations;
+var Location = rrc.Location;
+
+var Link = rrc.Link;
+
+var couchView = require('./couch-view');
+var couchChanges = require('./couch-changes');
 
 var URL_BASE = '';
 
@@ -6,84 +17,124 @@ var URL_BASE = '';
 if (location.host === 'localhost:8000')
     URL_BASE = 'https://irc.softver.org.mk/';
 
-var logApp = angular.module('ircLog', ['ngRoute', 'gdamjan.CouchDB', 'Colorizer'], function($routeProvider) {
-   $routeProvider
-      .when('/', {
-         templateUrl: 'home.html',
-         controller: 'HomeController'
-      })
-      .when('/:channel', {
-         templateUrl: 'channel-log.html',
-         controller: 'ChannelLogsController'
-      })
-      .when('/:channel/by-id/:docid', {
-         templateUrl: 'channel-log.html',
-         controller: 'ChannelLogAroundDocController'
-      })
-      .otherwise({ redirectTo: '/'});
-});
-logApp.controller('MainController', function(){ });
 
-logApp.controller('HomeController', function ($rootScope, $scope, couchView) {
-   delete $rootScope.title;
-   $scope.rows = [];
-   couchView(URL_BASE + 'ddoc/_view/channel', {
-      reduce: true,
-      group_level: 1
-   }).get().then(function(result) {
-      $scope.rows.push.apply($scope.rows, result.rows)
-   });
+
+var LogApp = React.createClass({
+    render: function() {
+        return Locations(
+            null,
+            Location({
+                path: '/',
+                handler: Home
+            }),
+            Location({
+                path: '/:channel',
+                handler: ChannelLogs
+            }),
+            Location({path: '/:channel/by-id/:docid', handler:ChannelLogsAroundDoc}),
+            rrc.NotFound({handler: Home})
+        );
+    }
 });
 
-logApp.controller('ChannelLogsController', function (
-    $rootScope, $scope, $routeParams,
-    couchView, couchChanges, $window, $timeout) {
-   $scope.channel = $rootScope.title = $routeParams.channel;
-   $scope.rows = [];
+var $ = React.DOM;
 
-   var view = couchView(URL_BASE + 'ddoc/_view/channel', {
-      include_docs: true,
-      descending: true,
-      limit: 100,
-      startkey: [$routeParams.channel, {}],
-      endkey: [$routeParams.channel, 0]
-   });
+var Home = React.createClass({
+    componentDidMount: function() {
+        var self = this;
+        couchView(URL_BASE + 'ddoc/_view/channel', {
+            reduce: true,
+            group_level: 1
+        }).get().then(function(result) {
+            self.setState({rows: result.rows});
+        });
+    },
+    getInitialState: function() {
+        return {rows: []};
+    },
+    render: function() {
+        var content = [
+            $.p(null, 'This web page is a viewer of irclogs collected by my',
+                $.a({href: "https://github.com/gdamjan/erlang-irc-bot"}, 'erlang irc bot'),
+                'The bot stores the logs in a CouchDB where this web-app (or couchapp)',
+                'is also stored. You can also',
+                $.a({href: "http://wiki.apache.org/couchdb/Replication"}, 'replicate'),
+                'the database at',
+                $.a({href: "https://irc.softver.org.mk/api"}, "https://irc.softver.org.mk/api")),
+            $.p(null, 'The following channels are currently logged:'),
+            $.ul(null,
+            this.state.rows.map(function(row) {
+                return $.li(null, Link({
+                    href: row.key[0],
+                    title: 'Number of messages logged: ' + row.value
+                }, row.key[0]));
+            })),
+            $.p(null, "If you want your irc channel on freenode logged, contact 'damjan' on #lugola.")
+        ];
+        return $.div({
+            id: 'infobox'
+        }, content)
+    }
+});
 
-   view.get().then(function (result) {
-      $scope.rows.push.apply($scope.rows, result.rows)
 
-      var params = { include_docs:true, since: result.last_seq,
-                     filter: 'log/channel', channel: 'lugola' };
-      couchChanges(URL_BASE + 'api/_changes', params).then(null,
-         function (err) { console.log(err) },
-         function (data) {
-             notifyNewRows(data);
-             $scope.rows.push.apply($scope.rows, data);
-         });
-   });
+var ChannelLogs = React.createClass({
+    getInitialState: function() {
+        return {rows: []}
+    },
+    componentDidMount: function() {
+        this.view = couchView(URL_BASE + 'ddoc/_view/channel', {
+            include_docs: true,
+            descending: true,
+            limit: 100,
+            startkey: [this.props.channel, {}],
+            endkey: [this.props.channel, 0]
+        });
+        var self = this;
+        this.view.get().then(function(result) {
+            self.setState({rows: result.rows});
+            var params = { include_docs:true, since: result.last_seq,
+                           filter: 'log/channel', channel: 'lugola' };
+            var feed = self.feed = couchChanges(URL_BASE + 'api/_changes', params)
 
-    function notifyNewRows(data) {
-        if ($scope.unreadCount != null) {
-            $scope.unreadCount += data.length
-            if (!$scope.flashing) {
-                flashTitlebar().then(function() {
-                    if ($scope.unreadCount)
-                        $rootScope.flashMessage = '('+$scope.unreadCount+') ';
-                });
+            feed.observe(function(rows) {
+                notifyNewRows(rows);
+                self.setState({rows: self.state.rows.concat(rows)});
+            });
+            feed.flatMapError(function(e) {
+                console.error(e);
+            });
+
+
+            function notifyNewRows(data) {
+                if ($scope.unreadCount != null) {
+                    $scope.unreadCount += data.length
+                    if (!$scope.flashing) {
+                        flashTitlebar().then(function() {
+                            if ($scope.unreadCount)
+                                $rootScope.flashMessage = '('+$scope.unreadCount+') ';
+                        });
+                    }
+                }
             }
-        }
+            function flashTitlebar(n) {
+                if (n == null) n = 5;
+                $scope.flashing = true;
+                var turnon = n % 2 && $scope.unreadCount;
+                $rootScope.flashMessage = turnon && $scope.unreadCount ? '*** ' : '';
+                if (n <= 0)
+                    return ($scope.flashing = false);
+                else
+                    return $timeout(function(){}, 500)
+                    .then(flashTitlebar.bind(null, n - 1));
+            }
+
+
+        });
+
     }
-    function flashTitlebar(n) {
-        if (n == null) n = 5;
-        $scope.flashing = true;
-        var turnon = n % 2 && $scope.unreadCount;
-        $rootScope.flashMessage = turnon && $scope.unreadCount ? '*** ' : '';
-        if (n <= 0)
-            return ($scope.flashing = false);
-        else
-            return $timeout(function(){}, 500)
-            .then(flashTitlebar.bind(null, n - 1));
-    }
+});
+
 
    var pager = view;
    $scope.prevClick = function() {
@@ -132,8 +183,8 @@ logApp.controller('ChannelLogAroundDocController', function ($rootScope, $scope,
    $scope.docid = $routeParams.docid;
    $scope.rows = [];
 
-   var db = couchDB(URL_BASE + 'api');
-   db.getDoc($routeParams.docid).then(function (doc) {
+   var getDoc = couchDB(URL_BASE + 'api');
+   getDoc($routeParams.docid).then(function (doc) {
 
       var view1 = couchView(URL_BASE + 'ddoc/_view/channel', {
          include_docs: true,
@@ -178,4 +229,3 @@ logApp.controller('ChannelLogAroundDocController', function ($rootScope, $scope,
    })
 
 })
-
