@@ -94,6 +94,27 @@ logApp.controller('ChannelLogsController', function (
          $scope.rows.push.apply($scope.rows, result.rows);
       })
    };
+    // flashing
+    function notifyNewRows(data) {
+        if ($scope.unreadCount == null) return;
+        $scope.unreadCount += data.length
+        if ($scope.flashing) return;
+        flashTitlebar().then(function() {
+            if (!$scope.unreadCount) return;
+            $rootScope.flashMessage = '('+$scope.unreadCount+') ';
+        });
+    }
+    function flashTitlebar(n) {
+        if (n == null) n = 5;
+        $scope.flashing = true;
+        var turnon = n % 2 && $scope.unreadCount;
+        $rootScope.flashMessage = turnon && $scope.unreadCount ? '*** ' : '';
+        if (n <= 0)
+            return ($scope.flashing = false);
+        else
+            return $timeout(function(){}, 500)
+            .then(flashTitlebar.bind(null, n - 1));
+    }
     var win = angular.element($window);
     win.bind('blur', function() {
         $scope.unreadCount = 0;
