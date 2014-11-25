@@ -1,3 +1,5 @@
+var xtend = require('xtend');
+
 var colors = {};
 
 function utf8Encode(string) {
@@ -72,7 +74,7 @@ function hslToRgb(h, s, l){
 }
 
 function getColor(nick, opt) {
-    opt = angular.extend({
+    opt = xtend({
         h: 0.5,
         dh: 0.5,
         s: 0.65,

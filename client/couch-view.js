@@ -16,29 +16,30 @@ function CouchView(url, params, method) {
 
 CouchView.prototype.get = function() {
     var self = this;
-    return Q.when(self.params).then(function (params) {
+    return Q(self.params).then(function (params) {
         var req = getView(self.method, self.url, params);
-        return Q.all({req: req, params: params});
-    }).then(function(all) {
+        return Q.all([req, params]);
+    }).spread(function(req, params) {
+        console.log(req);
         // prepare params for loadAfter and loadBefore
         var nextparams, prevparams;
-        if (all.req.config.params && all.req.config.params.limit) {
-            if (all.req.rows.length == all.req.config.params.limit) {
+        if (req.config && req.config.params && req.config.params.limit) {
+            if (req.rows.length == req.config.params.limit) {
                 // pop the extra last row for pagination
-                var last = all.req.rows.pop();
-                nextparams = copy(all.params);
+                var last = req.rows.pop();
+                nextparams = copy(params);
                 nextparams.startkey = last.key;
                 nextparams.startkey_docid = last.id;
             }
         }
-        if (all.req.rows.length > 0) {
-            var first = all.req.rows[0];
-            prevparams = copy(all.params);
+        if (req.rows.length > 0) {
+            var first = req.rows[0];
+            prevparams = copy(params);
             prevparams.endkey = first.key;
             prevparams.endkey_docid = first.id;
         }
         self._loaded.resolve({nextparams:nextparams, prevparams:prevparams});
-        return {rows: all.req.rows, last_seq: all.req.update_seq };
+        return {rows: req.rows, last_seq: req.update_seq };
     });
 };
 
@@ -57,8 +58,7 @@ CouchView.prototype.loadBefore = function() {
 function getView (method, url, _params) {
 
     var params = { reduce: false, update_seq: true};
-    xtend(params, _params);
-
+    params = xtend(params, _params);
     // Raise limit by 1 for pagination
     if (params.limit) { params.limit++; }
     // Convert key parameters to JSON

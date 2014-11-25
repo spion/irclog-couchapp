@@ -11,6 +11,7 @@ var xhr = require('./myxhr');
 var q = require('p-promise');
 var copy = require('xtend/immutable')
 var most = require('most');
+//var most = {};
 
 function delay(t) {
     return q().delay(t);

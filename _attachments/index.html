@@ -7,14 +7,6 @@
 
    <title>{{flashMessage}}IRClogger</title>
 
-   <script src="script/angular.min.js"></script>
-   <script src="script/angular-route.min.js"></script>
-   <script src="script/ng-couch.js"></script>
-   <script src="script/ng-couch-db.js"></script>
-   <script src="script/ng-couch-view.js"></script>
-   <script src="script/ng-couch-changes.js"></script>
-   <script src="script/ng-colorizer.js"></script>
-   <script src="script/irclog-app.js"></script>
    <link type="text/css" rel="stylesheet" href="style/style.css" />
    <link rel="apple-touch-icon" href="images/favicon.png" />
    <link rel="shortcut icon" type="image/png" href="images/favicon.png" />
@@ -24,8 +16,7 @@
    <h1>{{ title || 'IRC logs with realtime updates' }}</h1>
 </header>
 
-<!-- placeholder for partial views -->
-<div data-ng-view=""></div>
+<div id="app"></div>
 
 <footer>
   <div>
@@ -39,54 +30,7 @@
     alt="Fork me on GitHub"></a>
 
 
-<script type="text/ng-template" id="channel-log.html">
-<div>
-  <div class="pagination" data-ng-click="prevClick()">
-         &#8593;previous history&#8593;</div>
-
-  <table id="irclog">
-     <tbody id="2000-00-00"> <!-- FIXME THIS -->
-     <tr class="date">
-        <th colspan="2"><span><a href="#/lugola/2000-00-00">2000-00-00</a></span></th>
-     </tr>
-     <tr data-ng-repeat="row in rows | orderBy:'doc.timestamp'"
-                  ng-class="{highlight: docid==row.id}">
-        <td class="message">
-           <span class="nickname" style="background-color:{{row.doc.sender | colorize}}">{{row.doc.sender}}</span>
-           <span data-ng-bind="row.doc.message">the message goes here</span>
-        </td>
-        <td class="timestamp" valign="top" width="1%">
-           <a id="{{row.id}}" href="#/{{channel}}/by-id/{{row.id}}">{{1000* row.doc.timestamp | date:'HH:mm:ss'}}</a>
-        </td>
-     </tr>
-  </table>
-
-  <div class="pagination" data-ng-click="nextClick()">
-         &#8595;continue&#8595;</div>
-</div>
-</script>
-
-
-<script type="text/ng-template" id="home.html">
-<div id="infobox">
-   <p>
-   This web page is a viewer of irclogs collected by my
-   <a href="https://github.com/gdamjan/erlang-irc-bot">erlang irc bot</a>.
-   The bot stores the logs in a CouchDB where this web-app (or couchapp)
-   is also stored. You can also <a href="http://wiki.apache.org/couchdb/Replication">replicate</a>
-   the database at https://irc.softver.org.mk/api freely.
-   </p>
-   <p>
-   The following channels are currently logged:
-   </p>
-   <ul>
-      <li data-ng-repeat="row in rows">
-      <a href="#/{{row.key[0]}}" title="Number of messages logged: {{ row.value }}">{{ row.key[0] }}</a>
-      </li>
-   </ul>
-   <p>If you want your irc channel on freenode logged, contact 'damjan' on #lugola.</p>
-</div>
-</script>
+<script src="script/main.js"></script>
 
 </body>
 </html>
